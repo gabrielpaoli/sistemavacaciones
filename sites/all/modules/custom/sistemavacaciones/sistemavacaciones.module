@@ -1,0 +1,99 @@
+<?php
+
+	function sistemavacaciones_menu() {
+	  $items['tabla/vacaciones'] = array(
+	    'title' => 'Tabla vacaciones',
+	    'page callback' => 'tabla_vacaciones_page',
+	    'access callback' => 'sistemavacaciones_admin_access',   
+	    'menu_name' => 'main-menu',
+	    'type' => MENU_NORMAL_ITEM,
+	  );
+	  return $items;
+	}
+
+	function sistemavacaciones_admin_access() {  
+	  global $user;
+	  $roles = array('Jefe');
+	  foreach ($roles as $role) {
+	    if (in_array($role, $user->roles)) {
+	      return TRUE;
+	    }
+	  }
+	  return FALSE; 
+	}
+
+	function tabla_vacaciones_page(){
+		$datos = get_usuarios();
+		return theme('tabla_vacaciones', array('datos' => $datos));
+	}
+
+	function sistemavacaciones_theme() {
+	  return array(
+	    'tabla_vacaciones' => array(
+	      'render element' => 'elements',
+	      'template' => drupal_get_path('theme', variable_get('theme_default', NULL)) . '/templates/pages/tabla-vacaciones',
+	      'variables' => array(
+	        'datos' => NULL,
+	      ),          
+	    ),    
+	  );
+	} 
+
+	function get_usuarios(){
+		$query = db_select('users', 'u')->distinct();
+		$query->join('users_roles', 'ur', 'u.uid = ur.uid');
+		$query->join('field_data_field_aprobado', 'fdfa', 'u.uid = fdfa.entity_id');
+		$query->join('field_data_field_dias_restantes_de_vacacion', 'fdfdrdv', 'u.uid = fdfdrdv.entity_id');
+		$query->join('field_data_field_dias_totales_de_vacaciones', 'fdfdtdv', 'u.uid = fdfdtdv.entity_id');
+		$query->join('field_data_field_rango_de_fecha_vacaciones', 'fdfrdfv', 'u.uid = fdfrdfv.entity_id');
+
+		$query->fields('u', array('uid', 'name'));
+		$query->fields('fdfa', array('field_aprobado_value'));
+		$query->fields('fdfdrdv', array('field_dias_restantes_de_vacacion_value'));
+		$query->fields('fdfdtdv', array('field_dias_totales_de_vacaciones_value'));
+		$query->fields('fdfrdfv', array('field_rango_de_fecha_vacaciones_value', 'field_rango_de_fecha_vacaciones_value2'));
+
+		$query->condition('ur.rid', 5, '<>');
+		
+		$usuarios = $query->execute();
+
+		foreach($usuarios as $usuario):
+			$vacaciones_desde = date_parse($usuario->field_rango_de_fecha_vacaciones_value);
+			$vacaciones_desde = $vacaciones_desde["day"] . '-' . $vacaciones_desde["month"] . '-' . $vacaciones_desde["year"];
+
+			$vacaciones_hasta = date_parse($usuario->field_rango_de_fecha_vacaciones_value2);
+			$vacaciones_hasta = $vacaciones_hasta["day"] . '-' . $vacaciones_hasta["month"] . '-' . $vacaciones_hasta["year"];
+
+
+			$datosFinal[$usuario->uid]['uid'] = $usuario->uid;
+			$datosFinal[$usuario->uid]['name'] = $usuario->name;
+			$datosFinal[$usuario->uid]['dias_totales'] = $usuario->field_dias_totales_de_vacaciones_value;
+			$datosFinal[$usuario->uid]['dias_restantes'] = $usuario->field_dias_restantes_de_vacacion_value;
+			$datosFinal[$usuario->uid]['vacaciones_aprobadas'] = $usuario->field_aprobado_value;
+			$datosFinal[$usuario->uid]['vacaciones'][] = 'Desde el: ' . $vacaciones_desde . ' Hasta el: ' . $vacaciones_hasta;
+		endforeach;		
+		
+		$datosFinal = array_values($datosFinal);
+		return $datosFinal;
+	}
+
+	function sistemavacaciones_user_presave(&$edit, $account, $category) {
+		$dias_totales = $edit["field_dias_totales_de_vacaciones"]["und"][0]["value"];
+		$intervalF = array(0 => 0);
+		
+		foreach($edit["field_rango_de_fecha_vacaciones"]["und"] as $key => $value):
+			$fechaDesde = date_create($value["value"]);
+			$fechaHasta = date_create($value["value2"]);			
+			
+			$interval = date_diff($fechaDesde, $fechaHasta)->days;
+
+			$intervalF[] = $interval + 1;
+		endforeach;
+
+		$dias_restantes = $dias_totales - array_sum($intervalF);
+		$edit["field_dias_restantes_de_vacacion"]["und"][0]["value"] = $dias_restantes;
+	}
+
+	function sistemavacaciones_init() {
+		drupal_add_js(drupal_get_path('module', 'sistemavacaciones') . '/js/sistemavacaciones.js');
+	}
