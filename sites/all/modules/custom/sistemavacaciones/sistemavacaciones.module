@@ -1,0 +1,23 @@
+<?php
+
+
+	function sistemavacaciones_user_presave(&$edit, $account, $category) {
+		$dias_totales = $edit["field_dias_totales_de_vacaciones"]["und"][0]["value"];
+		$intervalF = array(0 => 0);
+		
+		foreach($edit["field_rango_de_fecha_vacaciones"]["und"] as $key => $value):
+			$fechaDesde = date_create($value["value"]);
+			$fechaHasta = date_create($value["value2"]);			
+			
+			$interval = date_diff($fechaDesde, $fechaHasta)->days;
+
+			$intervalF[] = $interval + 1;
+		endforeach;
+
+		$dias_restantes = $dias_totales - array_sum($intervalF);
+		$edit["field_dias_restantes_de_vacacion"]["und"][0]["value"] = $dias_restantes;
+	}
+
+	function sistemavacaciones_init() {
+		drupal_add_js(drupal_get_path('module', 'sistemavacaciones') . '/js/sistemavacaciones.js');
+	}

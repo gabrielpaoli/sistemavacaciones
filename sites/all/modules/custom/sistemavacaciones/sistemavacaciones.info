@@ -1,0 +1,4 @@
+name = Sistema de vacaciones
+description = Módulo para el sistema de vacaciones.
+core = 7.x
+package = Sistema de vacaciones
